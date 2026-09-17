@@ -80,6 +80,16 @@ function Assert-ArchiveConfig {
         if ([double]$Config.IncrementalInitialLookbackHours -le 0) {
             throw 'IncrementalInitialLookbackHours must be greater than zero.'
         }
+        if ($Config.ContainsKey('IncrementalInitialStartUtc')) {
+            $initialStart = ConvertTo-UtcDateTime $Config.IncrementalInitialStartUtc 'IncrementalInitialStartUtc'
+            if ($initialStart -ge [DateTime]::UtcNow.AddMinutes(5)) {
+                throw 'IncrementalInitialStartUtc must be earlier than the current time.'
+            }
+        }
+        if ($Config.ContainsKey('IncrementalStateKey') -and
+            [string]$Config.IncrementalStateKey -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$') {
+            throw 'IncrementalStateKey must contain only letters, numbers, dot, underscore, or hyphen and be at most 80 characters.'
+        }
     }
     $windowHours = 0.0
     if (-not [double]::TryParse([string]$Config.WindowHours, [ref]$windowHours) -or $windowHours -le 0 -or $windowHours -gt 168) {
@@ -156,12 +166,26 @@ function Resolve-ArchiveDateRange {
         }
     }
     $end = $NowUtc.ToUniversalTime().AddMinutes(-[double]$Config.IngestionDelayMinutes)
-    $start = $end.AddHours(-[double]$Config.IncrementalInitialLookbackHours)
+    $start = if ($Config.ContainsKey('IncrementalInitialStartUtc')) {
+        ConvertTo-UtcDateTime $Config.IncrementalInitialStartUtc 'IncrementalInitialStartUtc'
+    }
+    else {
+        $end.AddHours(-[double]$Config.IncrementalInitialLookbackHours)
+    }
     if (Test-Path -LiteralPath $StatePath) {
         try {
-            $state = Get-Content -LiteralPath $StatePath -Raw -Encoding utf8 | ConvertFrom-Json
-            $lastEnd = ConvertTo-UtcDateTime $state.lastSuccessfulEndUtc 'lastSuccessfulEndUtc'
-            $start = $lastEnd.AddMinutes(-[double]$Config.IncrementalOverlapMinutes)
+            $state = Get-Content -LiteralPath $StatePath -Raw -Encoding utf8 | ConvertFrom-Json -AsHashtable
+            if ($state.ContainsKey('pendingStartUtc') -and $state.ContainsKey('pendingEndUtc')) {
+                $start = ConvertTo-UtcDateTime $state.pendingStartUtc 'pendingStartUtc'
+                $end = ConvertTo-UtcDateTime $state.pendingEndUtc 'pendingEndUtc'
+            }
+            elseif ($state.ContainsKey('lastSuccessfulEndUtc')) {
+                $lastEnd = ConvertTo-UtcDateTime $state.lastSuccessfulEndUtc 'lastSuccessfulEndUtc'
+                $start = $lastEnd.AddMinutes(-[double]$Config.IncrementalOverlapMinutes)
+            }
+            else {
+                throw 'missing pending range and lastSuccessfulEndUtc'
+            }
         }
         catch {
             throw "Incremental state '$StatePath' is invalid: $($_.Exception.Message)"
@@ -169,6 +193,22 @@ function Resolve-ArchiveDateRange {
     }
     if ($start -ge $end) { throw 'Resolved incremental start must precede end; check delay and state settings.' }
     return [pscustomobject]@{ StartUtc = $start; EndUtc = $end }
+}
+
+function Test-RequiredCollectorsComplete {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][System.Collections.IEnumerable]$Statuses,
+        [Parameter(Mandatory)][string[]]$RequiredCollectors
+    )
+
+    foreach ($required in $RequiredCollectors) {
+        $status = @($Statuses | Where-Object source -eq $required)
+        if ($status.Count -ne 1 -or $status[0].status -ne 'success') {
+            return $false
+        }
+    }
+    return $true
 }
 
 function New-TimeWindows {
@@ -514,7 +554,8 @@ function Test-ArchiveManifest {
 
 Export-ModuleMember -Function @(
     'Initialize-ArchiveLog', 'Write-ArchiveLog', 'Assert-ArchiveConfig', 'ConvertTo-UtcDateTime',
-    'New-TimeWindows', 'Split-TimeWindow', 'Resolve-ArchiveDateRange', 'Assert-ResourceCapacity', 'Get-StableHash', 'Get-RecordValue', 'Get-FileSha256', 'Write-JsonAtomic',
+    'New-TimeWindows', 'Split-TimeWindow', 'Resolve-ArchiveDateRange', 'Test-RequiredCollectorsComplete',
+    'Assert-ResourceCapacity', 'Get-StableHash', 'Get-RecordValue', 'Get-FileSha256', 'Write-JsonAtomic',
     'Read-Checkpoint', 'Save-Checkpoint', 'Add-UniqueRecords',
     'Enter-ArchiveLock', 'Exit-ArchiveLock', 'Get-PartitionPaths', 'Test-PartitionManifest',
     'Write-ArchivePartition', 'Write-FailedPartitionManifest', 'Test-ArchiveManifest'

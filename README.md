@@ -39,14 +39,38 @@ The entry script validates a hashtable configuration, establishes only the selec
    .\Install-ArchivePrerequisites.ps1
    ```
 
-2. Copy `Config.example.psd1` to a protected local file such as `Config.psd1`. Set the tenant, mode/range, output root, collectors, and optional subscription IDs/workloads.
-3. Run:
+2. Run the zero-configuration launcher:
 
    ```powershell
-   pwsh -NoProfile -File .\Archive-M365Logs.ps1 -ConfigPath .\Config.psd1
+   pwsh -NoProfile -File .\Start-M365LogArchive.ps1
    ```
 
-The process prompts in a browser for Microsoft Graph, Exchange Online, and Azure only when a selected collector needs that control plane. A required collector failure returns exit code 1. An unavailable optional collector is recorded as `skipped-unavailable` or `optional-failed` and does not produce false success data.
+Sign in only through the official Microsoft browser/device experience. The launcher never asks for, accepts, or stores a password. It discovers the tenant from the authenticated Graph context; Exchange Online and Azure may require separate Microsoft sign-in/consent prompts.
+
+No configuration file is created. Output defaults to `%USERPROFILE%\M365LogsArchive`. The first run uses conservative `Small` settings and targets the maximum commonly documented native history independently for each default A3 source:
+
+| Default collector | First-run target |
+|---|---:|
+| Entra directory audit | 30 days |
+| Entra sign-ins | 30 days |
+| Purview Unified Audit Log | 180 days |
+| Intune audit through Graph | 2 years |
+| Azure Activity Log for every visible enabled subscription | 90 days |
+
+These are targets, not guarantees; licensing, service configuration, ingestion, and current Microsoft retention can make older records unavailable. A first run can take many hours and require substantial disk plus temporary uncompressed space. Later runs use a durable per-tenant, per-collector cursor with source-appropriate overlap and ingestion delay, so a successful Intune backfill is never coupled to a shorter Entra window.
+
+Preview without authentication or collection, or override only advanced operational defaults:
+
+```powershell
+.\Start-M365LogArchive.ps1 -ShowPlan
+.\Start-M365LogArchive.ps1 -OutputRoot 'E:\Protected\M365Logs' -ScaleProfile Medium
+```
+
+`EntraRiskySignIns` and `DefenderXdr` are intentionally excluded because A3 does not provide complete P2/A5 capability. No visible Azure subscriptions or an explicitly unavailable Intune endpoint is recorded as `skipped-unavailable`; authentication and permission failures remain explicit failures. For custom collectors/ranges, copy `Config.example.psd1` and retain the advanced command:
+
+```powershell
+pwsh -NoProfile -File .\Archive-M365Logs.ps1 -ConfigPath .\Config.psd1
+```
 
 ## Collectors, permissions, and roles
 
@@ -76,7 +100,7 @@ Admin consent is normally required for the Graph delegated permissions. Assign o
 
 `RequiredCollectors` determines exit behavior. Keep entitlement-dependent surfaces such as `EntraRiskySignIns` and `DefenderXdr` optional unless the tenant is known to license and authorize them.
 
-`ArchiveMode = 'Fixed'` uses `StartUtc` and `EndUtc`. `ArchiveMode = 'Incremental'` calculates a delayed end time, uses `IncrementalInitialLookbackHours` for the first run, then advances from `_state\incremental-<tenant>.json` with `IncrementalOverlapMinutes`. State advances only after every required collector succeeds. The overlap protects against late arrivals; source record IDs support downstream reconciliation.
+`ArchiveMode = 'Fixed'` uses `StartUtc` and `EndUtc`. `ArchiveMode = 'Incremental'` calculates a delayed end time, uses `IncrementalInitialLookbackHours` (or launcher-provided `IncrementalInitialStartUtc`) for the first run, then advances from durable state with `IncrementalOverlapMinutes`. Advanced configuration uses `_state\incremental-<tenant>.json`; quick mode isolates each stream as `_state\incremental-<tenant>-quick-<collector>.json`. A required collector that is partial, failed, or skipped does not advance its cursor. The overlap protects against late arrivals; source record IDs support downstream reconciliation.
 
 `WindowHours` is the upper ceiling for each adaptive API query/archive partition. One hour is conservative. Unified audit bisects a query if `Search-UnifiedAuditLog` reaches either the configured buffer or its 50,000-record session cap and fails explicitly if density remains too high at the minimum interval. Defender uses a limit-plus-one query and bisects before accepting a potentially truncated response. Results use half-open `[start,end)` windows; the Exchange query subtracts one .NET tick from its inclusive end to avoid boundary duplication without a representable gap.
 

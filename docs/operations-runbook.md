@@ -2,16 +2,18 @@
 
 ## Initial backfill
 
-1. Confirm source-native retention and choose a fixed range inside it. Backfill oldest-first in reviewable ranges rather than one maximum-size request.
-2. Start with `ScaleProfile = 'Small'`, one-hour `WindowHours`, entitlement-dependent collectors optional, and ample free disk.
-3. Run `pwsh -NoProfile -File .\Archive-M365Logs.ps1 -ConfigPath .\Config.psd1`.
+1. Run `.\Start-M365LogArchive.ps1 -ShowPlan` to review the default output and independent 30-day Entra, 180-day UAL, two-year Intune, and 90-day Azure targets without signing in.
+2. Confirm ample disk for compressed output and temporary uncompressed JSONL. The default preflight requires 10 GB but a complete first run can require substantially more and take many hours.
+3. Run `pwsh -NoProfile -File .\Start-M365LogArchive.ps1` and complete only official Microsoft sign-in prompts. No configuration question is asked.
 4. Review exit code, `_runs\<run-id>\run.manifest.json`, collector statuses, errors, counts, API wait/circuit metrics, and free capacity.
 5. Run `.\Test-Archive.ps1 -Path D:\M365LogArchive`.
-6. Preserve archive files and manifests together, then proceed to the next range.
+6. Preserve archive files and manifests together. Microsoft retention/licensing can return less than the target range.
 
 ## Incremental operation
 
-After backfill, switch to `ArchiveMode = 'Incremental'`. The first run uses `IncrementalInitialLookbackHours`; later runs begin at the last successful end minus `IncrementalOverlapMinutes` and end at current UTC minus `IngestionDelayMinutes`. Incremental state advances only when all required collectors succeed. Preserve overlapping runs and reconcile downstream by source IDs.
+Run the same launcher again. Each default collector has a durable tenant/collector-specific state file and begins at its last successful end minus its own overlap. Entra/Azure use 15-minute delay/overlap, Intune 60 minutes, and UAL 120 minutes. A required partial, failed, or skipped collector does not advance its cursor, while successful collectors retain their progress independently. Preserve overlapping runs and reconcile downstream by source IDs.
+
+For custom ranges or collectors, use `Archive-M365Logs.ps1 -ConfigPath .\Config.psd1`; this advanced mode remains supported.
 
 Recommended operator workflow: sign in with the designated least-privileged account, confirm storage/backup health, launch one run per output root, complete browser prompts, monitor structured console/log output, inspect the run manifest, verify hashes, and record operational exceptions. Do not launch a second run to bypass a slow first run.
 
@@ -21,7 +23,7 @@ Windows Task Scheduler may launch the script only as an attended convenience:
 
 ```text
 Program: pwsh.exe
-Arguments: -NoProfile -File "C:\Tools\msft-logs-archiver\Archive-M365Logs.ps1" -ConfigPath "C:\Secure\Config.psd1"
+Arguments: -NoProfile -File "C:\Tools\msft-logs-archiver\Start-M365LogArchive.ps1"
 ```
 
 Choose **Run only when user is logged on** and expect browser prompts whenever sessions require authentication. This delegated build is not unattended. A background task without an available operator must fail rather than bypass sign-in. Do not store passwords in task arguments. Unattended operation requires a future certificate app-only design.

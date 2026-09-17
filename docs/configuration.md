@@ -1,5 +1,25 @@
 # Configuration
 
+## Zero-configuration mode
+
+No configuration file is needed for the default workflow:
+
+```powershell
+.\Start-M365LogArchive.ps1
+```
+
+It discovers the authenticated tenant, uses `%USERPROFILE%\M365LogsArchive`, selects `Small`, enables `EntraAudit`, `EntraSignIns`, `UnifiedAudit`, `IntuneAudit`, and `AzureActivity`, and discovers every visible enabled Azure subscription. Optional overrides are:
+
+| Launcher parameter | Default | Meaning |
+|---|---|---|
+| `-OutputRoot` | `%USERPROFILE%\M365LogsArchive` | Protected local archive root |
+| `-ScaleProfile` | `Small` | `Small`, `Medium`, or `Large`; increase only from measured results |
+| `-ShowPlan` | off | Display ranges and perform no authentication or API collection |
+
+The launcher composes in-memory, one-collector incremental configurations. It writes no user-edited or temporary configuration. Separate `IncrementalStateKey` values prevent the 30-day, 90-day, 180-day, and two-year cursors from corrupting one another.
+
+## Advanced configuration
+
 Copy `Config.example.psd1` to ignored `Config.psd1`. It must return a hashtable.
 
 ## Properties
@@ -11,8 +31,10 @@ Copy `Config.example.psd1` to ignored `Config.psd1`. It must return a hashtable.
 | `ArchiveMode` | Yes | `Fixed` | `Fixed` or `Incremental` |
 | `StartUtc`, `EndUtc` | Fixed only | ISO 8601 UTC | Fixed half-open range; start must precede end and end cannot be future |
 | `IncrementalInitialLookbackHours` | Incremental only | `24` | First-run lookback; must be positive |
+| `IncrementalInitialStartUtc` | No | absent | Exact first-run UTC start used by quick mode; overrides the hour lookback when state is absent |
 | `IncrementalOverlapMinutes` | Incremental only | `15` | Overlap before last successful end |
 | `IngestionDelayMinutes` | Incremental only | `120` | Lag subtracted from current UTC time |
+| `IncrementalStateKey` | No | absent | Safe suffix isolating an incremental stream; letters, numbers, dot, underscore, hyphen |
 | `WindowHours` | Yes | `1` | Global partition/window ceiling; greater than 0, at most 168 |
 | `ScaleProfile` | Yes | `Small` | `Small`, `Medium`, or `Large` ceilings from `ScaleProfiles.psd1` |
 | `ServicePolicyOverrides` | No | `@{}` | Per-service override of existing policy keys only |

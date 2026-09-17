@@ -3,8 +3,9 @@
 | Symptom | Checks and action |
 |---|---|
 | Browser/authentication loop | Confirm PowerShell 7, system time, browser access, correct `TenantId`, conditional-access compliance, and that stale module sessions are disconnected. Reopen a clean `pwsh` process. |
+| Quick start cannot discover tenant | Complete Graph sign-in, then confirm `Get-MgContext` returns a nonempty valid `TenantId`. The launcher does not accept a manually typed tenant ID. |
 | Consent required / 403 | Compare selected collector with exact delegated scope and role in [authentication and permissions](authentication-and-permissions.md). Admin consent and user role are separate requirements. |
-| Optional source skipped | Inspect collector `error`. Verify license/onboarding and role. Defender XDR and complete risky-sign-in details are not guaranteed by A3. |
+| Source skipped unavailable | No visible enabled Azure subscription and an unavailable Intune endpoint are skipped without inventing data. Permission/consent failures remain failures. Defender XDR and complete risky-sign-in details are not quick-mode defaults or guaranteed by A3. |
 | 429 or rising waits | Honor service recovery; do not restart in parallel. Use `Small`, shorten `WindowHours`, lower overrides, and inspect throttle/low-quota metrics. |
 | 5xx/timeouts/circuit open | Wait through cooldown, check Microsoft service health/network, and rerun identical configuration. Persistent permanent errors are intentionally not retried. |
 | UAL cap reached | Shorten windows. The collector bisects at its configured buffer/50,000 session boundary and fails at minimum window rather than accept truncation. |

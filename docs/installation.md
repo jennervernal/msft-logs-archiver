@@ -44,5 +44,10 @@ Before collection, confirm:
 4. Azure subscriptions are visible to the operator if `AzureActivity` is selected.
 5. Defender products are separately licensed/onboarded if `DefenderXdr` is selected; A3 alone is not sufficient for the complete Defender XDR surface.
 6. Tenant administrators have approved the delegated scopes and assigned least-privileged reader roles described in [authentication and permissions](authentication-and-permissions.md).
-Copy the example configuration outside source control or to ignored `Config.psd1`, protect it with NTFS ACLs, then follow the [configuration](configuration.md) and [operations runbook](operations-runbook.md).
-Copy the example configuration outside source control or to ignored `Config.psd1`, protect it with NTFS ACLs, then follow the [configuration](configuration.md) and [operations runbook](operations-runbook.md).
+After module installation, the normal path requires no tenant ID or configuration file:
+
+```powershell
+pwsh -NoProfile -File .\Start-M365LogArchive.ps1
+```
+
+The operator signs in through Microsoft; the launcher discovers the tenant and writes to `%USERPROFILE%\M365LogsArchive`. Use `-ShowPlan` for an offline preview. Only advanced/custom collection requires copying `Config.example.psd1` to ignored `Config.psd1`; see [configuration](configuration.md) and [operations runbook](operations-runbook.md).

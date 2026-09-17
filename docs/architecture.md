@@ -4,7 +4,8 @@ The suite is a PowerShell 7, single-process, local-filesystem archive pipeline. 
 
 ```mermaid
 flowchart LR
-    O[Operator] --> C[Config.psd1]
+    O[Operator] --> Q[Start-M365LogArchive.ps1]
+    Q --> C[In-memory per-collector plans]
     C --> R[Archive-M365Logs.ps1]
     R --> A[Interactive delegated authentication]
     A --> G[Microsoft Graph]
@@ -33,6 +34,8 @@ flowchart LR
 6. Records are deduplicated inside each partition using native IDs or collector-specific stable keys. Keyless records use a SHA-256 hash of their serialized representation.
 7. UTF-8 JSONL is written to a unique temporary file, compressed to a second temporary file, and atomically renamed. The adjacent manifest is written atomically only after the archive hash exists.
 8. The checkpoint is advanced after the valid partition commit. The run manifest inventories all completed partitions and API metrics. Incremental state advances only when required collectors succeed.
+
+Quick mode invokes the same engine sequentially with one in-memory collector configuration per service. This gives each source its own native-history start, deterministic run identity, checkpoint, and `_state\incremental-<tenant>-quick-<collector>.json` cursor while sharing the output root, locks, adaptive throttle state, and authenticated process contexts. Before API work, state records an exact pending start/end. An interrupted or failed run reuses that boundary and therefore the same run ID/checkpoint even when wall-clock time advances. Advanced `-ConfigPath` mode continues to support multi-collector fixed or shared incremental runs.
 
 ## Atomicity, hashes, and fidelity
 

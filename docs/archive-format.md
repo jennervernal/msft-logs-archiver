@@ -7,6 +7,7 @@
   .archive.lock
   _state\
     incremental-<tenant-guid>.json
+    incremental-<tenant-guid>-quick-<collector>.json
     throttle-state.json
   _runs\<run-id>\
     checkpoint.json
@@ -18,6 +19,8 @@
 ```
 
 `<Source>` is the collector name. Azure and Defender append the fabricated-safe subscription GUID or table name, for example `AzureActivity-11111111-2222-3333-4444-555555555555` or `DefenderXdr-AlertInfo`.
+
+The unsuffixed incremental file belongs to advanced configuration mode. Zero-configuration mode uses one `quick-<collector>` file per stream so different retention ranges and success/failure outcomes remain independent.
 
 ## Data files
 

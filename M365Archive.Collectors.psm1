@@ -81,6 +81,40 @@ function Get-IntuneAuditRecords {
     Invoke-GraphPagedRequest "https://graph.microsoft.com/v1.0/deviceManagement/auditEvents?`$filter=$filter&`$top=$pageSize"
 }
 
+function Test-IntuneAuditCapability {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$TenantId)
+
+    Connect-ArchiveGraph -TenantId $TenantId -Scopes @('DeviceManagementApps.Read.All')
+    try {
+        Invoke-ServiceOperation -Service Graph -OperationName 'Intune audit capability check' -Operation {
+            Invoke-MgGraphRequest -Method GET `
+                -Uri 'https://graph.microsoft.com/v1.0/deviceManagement/auditEvents?$top=1' `
+                -OutputType PSObject
+        } | Out-Null
+        return [pscustomobject]@{ Available = $true; Reason = $null }
+    }
+    catch {
+        $exception = $_.Exception
+        $responseProperty = $exception.PSObject.Properties['Response']
+        $response = if ($responseProperty) { $responseProperty.Value } else { $null }
+        $statusCode = if ($response -and $response.StatusCode) {
+            [int]$response.StatusCode
+        }
+        elseif ($exception.PSObject.Properties['StatusCode']) {
+            [int]$exception.StatusCode
+        }
+        else { 0 }
+        if ($statusCode -eq 404) {
+            return [pscustomobject]@{
+                Available = $false
+                Reason = 'The Intune audit endpoint is unavailable for this tenant.'
+            }
+        }
+        throw
+    }
+}
+
 function Get-UnifiedAuditRecords {
     [CmdletBinding()]
     param(
@@ -247,7 +281,7 @@ function Get-DefenderXdrHuntingRecords {
 
 Export-ModuleMember -Function @(
     'Connect-ArchiveGraph', 'Invoke-GraphPagedRequest', 'Get-EntraAuditRecords',
-    'Get-EntraSignInRecords', 'Get-IntuneAuditRecords', 'Connect-ArchiveExchange',
+    'Get-EntraSignInRecords', 'Get-IntuneAuditRecords', 'Test-IntuneAuditCapability', 'Connect-ArchiveExchange',
     'Get-UnifiedAuditRecords', 'Connect-ArchiveAzure', 'Get-AzureActivityRecords',
     'Test-DefenderXdrCapability', 'Get-DefenderXdrHuntingRecords'
 )

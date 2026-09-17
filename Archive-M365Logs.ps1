@@ -1,6 +1,9 @@
-[CmdletBinding()]
+[CmdletBinding(DefaultParameterSetName = 'Path')]
 param(
-    [Parameter(Mandatory)][string]$ConfigPath
+    [Parameter(Mandatory, ParameterSetName = 'Path')][string]$ConfigPath,
+    [Parameter(Mandatory, ParameterSetName = 'Object')][hashtable]$ConfigData,
+    [Parameter(ParameterSetName = 'Object')][switch]$NoDisconnect,
+    [Parameter(ParameterSetName = 'Object')][switch]$PassThruExitCode
 )
 
 Set-StrictMode -Version Latest
@@ -20,9 +23,15 @@ $runRoot = $null
 $checkpoint = $null
 
 try {
-    $resolvedConfig = (Resolve-Path -LiteralPath $ConfigPath).Path
-    $config = & $resolvedConfig
-    if ($config -isnot [hashtable]) { throw "Configuration '$resolvedConfig' must return a hashtable." }
+    $config = if ($PSCmdlet.ParameterSetName -eq 'Object') {
+        $ConfigData
+    }
+    else {
+        $resolvedConfig = (Resolve-Path -LiteralPath $ConfigPath).Path
+        $loadedConfig = & $resolvedConfig
+        if ($loadedConfig -isnot [hashtable]) { throw "Configuration '$resolvedConfig' must return a hashtable." }
+        $loadedConfig
+    }
     Assert-ArchiveConfig $config | Out-Null
     $requiredModules = [Collections.Generic.List[string]]::new()
     if (@($config.Collectors) | Where-Object { $_ -in @('EntraAudit', 'EntraSignIns', 'EntraRiskySignIns', 'IntuneAudit', 'DefenderXdr') }) {
@@ -41,11 +50,37 @@ try {
     $capacity = Assert-ResourceCapacity -OutputRoot $outputRoot `
         -MinimumFreeDiskGB $config.ResourceControls.MinimumFreeDiskGB `
         -MaximumProcessMemoryMB $config.ResourceControls.MaximumProcessMemoryMB
-    $incrementalStatePath = Join-Path $outputRoot (Join-Path '_state' "incremental-$($config.TenantId).json")
+    $incrementalStateName = if ($config.ContainsKey('IncrementalStateKey')) {
+        "incremental-$($config.TenantId)-$($config.IncrementalStateKey).json"
+    }
+    else {
+        "incremental-$($config.TenantId).json"
+    }
+    $incrementalStatePath = Join-Path $outputRoot (Join-Path '_state' $incrementalStateName)
     $dateRange = Resolve-ArchiveDateRange -Config $config -StatePath $incrementalStatePath
     $startUtc = $dateRange.StartUtc
     $endUtc = $dateRange.EndUtc
     $lock = Enter-ArchiveLock $outputRoot
+    if ($config.ArchiveMode -eq 'Incremental') {
+        $pendingState = [ordered]@{
+            schemaVersion = '1.0'
+            tenantId = $config.TenantId
+            pendingStartUtc = $startUtc.ToString('o')
+            pendingEndUtc = $endUtc.ToString('o')
+            updatedUtc = [DateTime]::UtcNow.ToString('o')
+        }
+        if ($config.ContainsKey('IncrementalStateKey')) {
+            $pendingState.incrementalStateKey = $config.IncrementalStateKey
+        }
+        if (Test-Path -LiteralPath $incrementalStatePath) {
+            $existingIncrementalState = Get-Content -LiteralPath $incrementalStatePath -Raw -Encoding utf8 |
+                ConvertFrom-Json -AsHashtable
+            if ($existingIncrementalState.ContainsKey('lastSuccessfulEndUtc')) {
+                $pendingState.lastSuccessfulEndUtc = $existingIncrementalState.lastSuccessfulEndUtc
+            }
+        }
+        Write-JsonAtomic -Path $incrementalStatePath -Value $pendingState
+    }
     $azureSelection = if ($config.ContainsKey('AzureSubscriptionIds')) { @($config.AzureSubscriptionIds) -join ',' } else { '' }
     $unifiedSelection = if ($config.ContainsKey('UnifiedAuditRecordTypes')) { @($config.UnifiedAuditRecordTypes) -join ',' } else { '' }
     $defenderSelection = if ($config.ContainsKey('DefenderXdrTables')) { @($config.DefenderXdrTables) -join ',' } else { '' }
@@ -113,7 +148,6 @@ try {
                 Get-AzSubscription -TenantId $config.TenantId
             } | Where-Object State -eq 'Enabled').Id)
         }
-        if ($selectedAzureSubscriptions.Count -eq 0) { throw 'No enabled Azure subscriptions are visible to the signed-in user.' }
     }
 
     foreach ($collector in $collectors) {
@@ -125,6 +159,30 @@ try {
             default { 'Graph' }
         }
         $isOptional = $collector -notin @($config.RequiredCollectors)
+        if ($collector -eq 'AzureActivity' -and $selectedAzureSubscriptions.Count -eq 0) {
+            $runStatuses.Add([pscustomobject]@{
+                source = $collector; status = 'skipped-unavailable'; optional = $isOptional
+                error = 'No enabled Azure subscriptions are visible to the signed-in user.'
+                partitions = 0; records = 0
+                elapsedSeconds = [Math]::Round(([DateTime]::UtcNow - $collectorStarted).TotalSeconds, 3)
+                recordsPerSecond = 0
+            })
+            Write-ArchiveLog WARN 'Azure Activity is unavailable because no enabled subscriptions are visible; collector skipped.'
+            continue
+        }
+        if ($collector -eq 'IntuneAudit') {
+            $capability = Test-IntuneAuditCapability -TenantId $config.TenantId
+            if (-not $capability.Available) {
+                $runStatuses.Add([pscustomobject]@{
+                    source = $collector; status = 'skipped-unavailable'; optional = $isOptional
+                    error = $capability.Reason; partitions = 0; records = 0
+                    elapsedSeconds = [Math]::Round(([DateTime]::UtcNow - $collectorStarted).TotalSeconds, 3)
+                    recordsPerSecond = 0
+                })
+                Write-ArchiveLog WARN 'Intune audit is unavailable for this tenant; collector skipped.' @{ reason = $capability.Reason }
+                continue
+            }
+        }
         if ($collector -eq 'DefenderXdr') {
             $capability = Test-DefenderXdrCapability -TenantId $config.TenantId
             if (-not $capability.Available) {
@@ -317,7 +375,9 @@ try {
         apiMetrics = (Get-ApiRuntimeSnapshot)
     }
     Write-JsonAtomic -Path (Join-Path $runRoot 'run.manifest.json') -Value $runManifest
-    if ($exitCode -eq 0 -and $config.ArchiveMode -eq 'Incremental') {
+    $requiredCollectorsComplete = Test-RequiredCollectorsComplete `
+        -Statuses $runStatuses -RequiredCollectors @($config.RequiredCollectors)
+    if ($exitCode -eq 0 -and $requiredCollectorsComplete -and $config.ArchiveMode -eq 'Incremental') {
         Write-JsonAtomic -Path $incrementalStatePath -Value @{
             schemaVersion = '1.0'
             tenantId = $config.TenantId
@@ -347,11 +407,14 @@ catch {
     else { Write-Error $_ }
 }
 finally {
-    if ($exchangeConnected) { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue }
-    if (Get-Command Disconnect-MgGraph -ErrorAction SilentlyContinue) {
-        Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+    if (-not $NoDisconnect) {
+        if ($exchangeConnected) { Disconnect-ExchangeOnline -Confirm:$false -ErrorAction SilentlyContinue }
+        if (Get-Command Disconnect-MgGraph -ErrorAction SilentlyContinue) {
+            Disconnect-MgGraph -ErrorAction SilentlyContinue | Out-Null
+        }
     }
     if ($lock) { Exit-ArchiveLock $lock }
 }
 
+if ($PassThruExitCode) { return $exitCode }
 exit $exitCode

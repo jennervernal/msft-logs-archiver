@@ -50,6 +50,23 @@ Describe 'Add-UniqueRecords' {
     }
 }
 
+Describe 'Test-RequiredCollectorsComplete' {
+    It 'requires every required collector to have exactly one successful status' {
+        $statuses = @(
+            [pscustomobject]@{ source = 'EntraAudit'; status = 'success' }
+            [pscustomobject]@{ source = 'AzureActivity'; status = 'skipped-unavailable' }
+            [pscustomobject]@{ source = 'OptionalSource'; status = 'optional-failed' }
+        )
+        Test-RequiredCollectorsComplete -Statuses $statuses -RequiredCollectors @('EntraAudit') |
+            Should -BeTrue
+        Test-RequiredCollectorsComplete -Statuses $statuses -RequiredCollectors @('EntraAudit', 'AzureActivity') |
+            Should -BeFalse
+        Test-RequiredCollectorsComplete -Statuses @(
+            [pscustomobject]@{ source = 'EntraAudit'; status = 'partial' }
+        ) -RequiredCollectors @('EntraAudit') | Should -BeFalse
+    }
+}
+
 Describe 'archive hashing and manifest validation' {
     It 'writes gzip JSONL and validates its SHA-256' {
         $records = @([pscustomobject]@{ id = '1'; value = 'alpha' }, [pscustomobject]@{ id = '2'; value = 'beta' })

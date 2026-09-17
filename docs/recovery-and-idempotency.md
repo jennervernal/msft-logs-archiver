@@ -4,6 +4,8 @@
 
 Rerun the identical command and configuration. The deterministic run ID selects the same `_runs` directory. Checkpointed completed partitions are skipped; the saved active window is reused; an incomplete partition is recollected. A valid successful partition is never overwritten. A successful manifest whose archive is missing or hash-invalid causes a hard failure rather than silent replacement.
 
+With `Start-M365LogArchive.ps1`, each collector is a separate deterministic incremental invocation. The exact pending start/end is persisted before API work, so interruption reselects the same run ID and checkpoint instead of shifting a two-year backfill forward with wall-clock time. Successful collector state advances independently. A partial, failed, or skipped required collector retains its pending range on the next launch; it does not force successful sources to repeat their maximum-history backfill.
+
 Deduplication occurs within each partition. Incremental overlap can repeat the same source record across different runs by design; consumers should reconcile by stable source ID (or appropriate composite key) without discarding legitimate updates.
 
 ## Partial failures

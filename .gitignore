@@ -12,6 +12,7 @@ Config.*.psd1
 
 # Runtime archive, state, checkpoints, locks, and exports
 M365LogArchive/
+M365LogsArchive/
 Archive/
 Archives/
 _runs/

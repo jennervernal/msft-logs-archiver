@@ -2,6 +2,8 @@
 
 This build supports **interactive delegated authentication only**. It opens Microsoft sign-in as required by selected collectors and scopes module contexts to the current process. It does not accept credentials, save tokens, or implement a token cache of its own. Microsoft modules and operating-system sign-in components may maintain their own caches; manage those according to organizational policy.
 
+`Start-M365LogArchive.ps1` first requests Graph `AuditLog.Read.All` and `DeviceManagementApps.Read.All`, then validates the tenant GUID from `Get-MgContext`. The operator never types a tenant ID. Existing process/SSO context is reused where official modules permit it, but Exchange Online and Azure can still present separate Microsoft prompts. Enter credentials only into Microsoft's browser/device sign-in—not `Read-Host`, command arguments, environment variables, files, or `SecureString` supplied to this suite.
+
 Truly unattended operation requires a future, separately reviewed certificate-based app-only design, workload-specific application permissions, certificate lifecycle protection, and durable centralized coordination. It is not supported by this interactive build.
 
 ## Exact access by collector
