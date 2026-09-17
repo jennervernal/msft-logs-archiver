@@ -1,0 +1,20 @@
+@{
+    Small = @{
+        Graph = @{ MaxAttempts = 6; BaseDelaySeconds = 1; MaxDelaySeconds = 60; MinSpacingMilliseconds = 250; MaxConcurrency = 1; CircuitBreakerThreshold = 5; CircuitBreakerCooldownSeconds = 60; InitialWindowMinutes = 60; MinWindowMinutes = 5; MaxWindowMinutes = 120; PageSize = 500; MinPageSize = 50; RecoverySuccesses = 10 }
+        Purview = @{ MaxAttempts = 5; BaseDelaySeconds = 2; MaxDelaySeconds = 120; MinSpacingMilliseconds = 1000; MaxConcurrency = 1; CircuitBreakerThreshold = 4; CircuitBreakerCooldownSeconds = 120; InitialWindowMinutes = 60; MinWindowMinutes = 5; MaxWindowMinutes = 120; PageSize = 5000; MinPageSize = 500; RecoverySuccesses = 8 }
+        Azure = @{ MaxAttempts = 6; BaseDelaySeconds = 1; MaxDelaySeconds = 60; MinSpacingMilliseconds = 250; MaxConcurrency = 1; CircuitBreakerThreshold = 5; CircuitBreakerCooldownSeconds = 60; InitialWindowMinutes = 60; MinWindowMinutes = 5; MaxWindowMinutes = 120; PageSize = 1000; MinPageSize = 100; RecoverySuccesses = 10 }
+        Defender = @{ MaxAttempts = 5; BaseDelaySeconds = 2; MaxDelaySeconds = 120; MinSpacingMilliseconds = 1500; MaxConcurrency = 1; CircuitBreakerThreshold = 4; CircuitBreakerCooldownSeconds = 180; InitialWindowMinutes = 15; MinWindowMinutes = 1; MaxWindowMinutes = 30; PageSize = 100000; MinPageSize = 10000; RecoverySuccesses = 12 }
+    }
+    Medium = @{
+        Graph = @{ MaxAttempts = 6; BaseDelaySeconds = 1; MaxDelaySeconds = 60; MinSpacingMilliseconds = 150; MaxConcurrency = 2; CircuitBreakerThreshold = 5; CircuitBreakerCooldownSeconds = 60; InitialWindowMinutes = 45; MinWindowMinutes = 5; MaxWindowMinutes = 120; PageSize = 750; MinPageSize = 50; RecoverySuccesses = 12 }
+        Purview = @{ MaxAttempts = 5; BaseDelaySeconds = 2; MaxDelaySeconds = 120; MinSpacingMilliseconds = 750; MaxConcurrency = 1; CircuitBreakerThreshold = 4; CircuitBreakerCooldownSeconds = 120; InitialWindowMinutes = 45; MinWindowMinutes = 5; MaxWindowMinutes = 90; PageSize = 5000; MinPageSize = 500; RecoverySuccesses = 10 }
+        Azure = @{ MaxAttempts = 6; BaseDelaySeconds = 1; MaxDelaySeconds = 60; MinSpacingMilliseconds = 150; MaxConcurrency = 2; CircuitBreakerThreshold = 5; CircuitBreakerCooldownSeconds = 60; InitialWindowMinutes = 45; MinWindowMinutes = 5; MaxWindowMinutes = 120; PageSize = 1000; MinPageSize = 100; RecoverySuccesses = 12 }
+        Defender = @{ MaxAttempts = 5; BaseDelaySeconds = 2; MaxDelaySeconds = 120; MinSpacingMilliseconds = 1000; MaxConcurrency = 1; CircuitBreakerThreshold = 4; CircuitBreakerCooldownSeconds = 180; InitialWindowMinutes = 10; MinWindowMinutes = 1; MaxWindowMinutes = 30; PageSize = 100000; MinPageSize = 10000; RecoverySuccesses = 15 }
+    }
+    Large = @{
+        Graph = @{ MaxAttempts = 7; BaseDelaySeconds = 1; MaxDelaySeconds = 90; MinSpacingMilliseconds = 100; MaxConcurrency = 4; CircuitBreakerThreshold = 6; CircuitBreakerCooldownSeconds = 90; InitialWindowMinutes = 30; MinWindowMinutes = 2; MaxWindowMinutes = 90; PageSize = 1000; MinPageSize = 50; RecoverySuccesses = 15 }
+        Purview = @{ MaxAttempts = 6; BaseDelaySeconds = 2; MaxDelaySeconds = 180; MinSpacingMilliseconds = 500; MaxConcurrency = 1; CircuitBreakerThreshold = 5; CircuitBreakerCooldownSeconds = 180; InitialWindowMinutes = 30; MinWindowMinutes = 5; MaxWindowMinutes = 60; PageSize = 5000; MinPageSize = 500; RecoverySuccesses = 12 }
+        Azure = @{ MaxAttempts = 7; BaseDelaySeconds = 1; MaxDelaySeconds = 90; MinSpacingMilliseconds = 100; MaxConcurrency = 4; CircuitBreakerThreshold = 6; CircuitBreakerCooldownSeconds = 90; InitialWindowMinutes = 30; MinWindowMinutes = 2; MaxWindowMinutes = 90; PageSize = 1000; MinPageSize = 100; RecoverySuccesses = 15 }
+        Defender = @{ MaxAttempts = 6; BaseDelaySeconds = 2; MaxDelaySeconds = 180; MinSpacingMilliseconds = 750; MaxConcurrency = 2; CircuitBreakerThreshold = 5; CircuitBreakerCooldownSeconds = 240; InitialWindowMinutes = 5; MinWindowMinutes = 1; MaxWindowMinutes = 20; PageSize = 100000; MinPageSize = 10000; RecoverySuccesses = 20 }
+    }
+}

@@ -1,0 +1,43 @@
+# Operator configuration and credentials
+Config.psd1
+Config.*.psd1
+!Config.example.psd1
+*.token
+*.tokens
+*.secret
+*.secrets
+*.pfx
+*.pem
+*.key
+
+# Runtime archive, state, checkpoints, locks, and exports
+M365LogArchive/
+Archive/
+Archives/
+_runs/
+_state/
+_exports/
+*.jsonl
+*.jsonl.gz
+*.manifest.json
+checkpoint.json
+run.log.jsonl
+.archive.lock
+*.tmp
+
+# PowerShell and test-generated artifacts
+TestResults/
+tests/TestResults/
+*.trx
+coverage.xml
+Pester*.xml
+*.clixml
+
+# Machine/editor transient content
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.bak
+*.lock
