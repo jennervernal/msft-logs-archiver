@@ -76,7 +76,11 @@ function Get-IntuneAuditRecords {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$TenantId, [Parameter(Mandatory)][DateTime]$StartUtc, [Parameter(Mandatory)][DateTime]$EndUtc)
     Connect-ArchiveGraph -TenantId $TenantId -Scopes @('DeviceManagementApps.Read.All')
-    $filter = [Uri]::EscapeDataString("activityDateTime ge $($StartUtc.ToString('o')) and activityDateTime lt $($EndUtc.ToString('o'))")
+    $retentionStartUtc = [DateTime]::UtcNow.AddYears(-2).AddMinutes(1)
+    if ($EndUtc -le $retentionStartUtc) { return }
+    if ($StartUtc -lt $retentionStartUtc) { $StartUtc = $retentionStartUtc }
+    $inclusiveEndUtc = $EndUtc.AddTicks(-1)
+    $filter = [Uri]::EscapeDataString("activityDateTime ge $($StartUtc.ToString('o')) and activityDateTime le $($inclusiveEndUtc.ToString('o'))")
     $pageSize = [Math]::Min(100, (Get-ServiceRuntime Graph).CurrentPageSize)
     Invoke-GraphPagedRequest "https://graph.microsoft.com/v1.0/deviceManagement/auditEvents?`$filter=$filter&`$top=$pageSize"
 }
@@ -139,7 +143,6 @@ function Get-UnifiedAuditRecords {
                 SessionId      = $sessionId
                 SessionCommand = 'ReturnLargeSet'
                 ResultSize     = [Math]::Min($MaximumBufferedRecords, [Math]::Min(5000, (Get-ServiceRuntime Purview).CurrentPageSize))
-                Formatted      = $true
                 ErrorAction    = 'Stop'
             }
             if ($Workloads.Count -gt 0) { $params.RecordType = $Workloads }
@@ -178,7 +181,7 @@ function Get-UnifiedAuditRecords {
 function Connect-ArchiveExchange {
     [CmdletBinding()]
     param([string]$UserPrincipalName)
-    $params = @{ ShowBanner = $false; SkipLoadingFormatData = $true }
+    $params = @{ ShowBanner = $false; DisableWAM = $true }
     if ($UserPrincipalName) { $params.UserPrincipalName = $UserPrincipalName }
     Connect-ExchangeOnline @params
 }
@@ -198,7 +201,8 @@ function Get-AzureActivityRecords {
         [Parameter(Mandatory)][DateTime]$EndUtc
     )
     Set-AzContext -SubscriptionId $SubscriptionId | Out-Null
-    $filter = [Uri]::EscapeDataString("eventTimestamp ge '$($StartUtc.ToString('o'))' and eventTimestamp lt '$($EndUtc.ToString('o'))'")
+    $inclusiveEndUtc = $EndUtc.AddTicks(-1)
+    $filter = [Uri]::EscapeDataString("eventTimestamp ge '$($StartUtc.ToString('o'))' and eventTimestamp le '$($inclusiveEndUtc.ToString('o'))'")
     $uri = "/subscriptions/$SubscriptionId/providers/microsoft.insights/eventtypes/management/values?api-version=2015-04-01&`$filter=$filter"
     while ($uri) {
         $response = Invoke-ServiceOperation -Service Azure -OperationName "Azure Activity Log page for $SubscriptionId" -IsPage -Operation {
@@ -214,7 +218,7 @@ function Get-AzureActivityRecords {
         }
         $page = $response.Content | ConvertFrom-Json
         foreach ($record in @($page.value)) { $record }
-        $uri = $page.nextLink
+        $uri = Get-RecordValue $page 'nextLink'
     }
 }
 

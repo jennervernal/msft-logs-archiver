@@ -49,6 +49,24 @@ Describe 'Get-ApiFailureClassification' {
         $ual = [Management.Automation.ErrorRecord]::new([Exception]::new('Server busy; request throttled'), 'busy', 0, $null)
         (Get-ApiFailureClassification $ual Purview).Kind | Should -Be 'Throttle'
     }
+
+    It 'classifies Graph SDK wrapped TooManyRequests errors as throttles' {
+        $wrapped = [Management.Automation.ErrorRecord]::new(
+            [Exception]::new('Too many retries performed. HTTP request failed with status code: TooManyRequests.'),
+            'wrapped429', 0, $null
+        )
+
+        (Get-ApiFailureClassification $wrapped Graph).Kind | Should -Be 'Throttle'
+    }
+
+    It 'classifies Purview server-side try-again errors as transient' {
+        $serverError = [Management.Automation.ErrorRecord]::new(
+            [Exception]::new('A server side error has occurred. Please try again after some time.'),
+            'purviewServerError', 0, $null
+        )
+
+        (Get-ApiFailureClassification $serverError Purview).Kind | Should -Be 'Transient'
+    }
 }
 
 Describe 'adaptive service runtime' {

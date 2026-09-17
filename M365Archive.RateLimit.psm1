@@ -78,6 +78,7 @@ function Get-ApiFailureClassification {
 
     $kind = 'Permanent'
     if ($statusCode -eq 429) { $kind = 'Throttle' }
+    elseif ($Service -eq 'Graph' -and $exception.Message -match '(?i)\b(TooManyRequests|Too Many Requests|status code:\s*429)\b') { $kind = 'Throttle' }
     elseif ($statusCode -in @(408, 500, 502, 503, 504)) { $kind = 'Transient' }
     elseif (
         $exception -is [Net.Http.HttpRequestException] -or
@@ -85,7 +86,7 @@ function Get-ApiFailureClassification {
         $exception -is [Threading.Tasks.TaskCanceledException] -or
         $exception -is [TimeoutException]
     ) { $kind = 'Transient' }
-    elseif ($Service -eq 'Purview' -and $exception.Message -match '(?i)\b(throttl|server busy|temporar(?:y|ily) unavailable|timed? out|timeout)\b') {
+    elseif ($Service -eq 'Purview' -and $exception.Message -match '(?i)\b(throttl|server busy|server side error|temporar(?:y|ily) unavailable|timed? out|timeout|try again)\b') {
         $kind = if ($exception.Message -match '(?i)throttl|server busy') { 'Throttle' } else { 'Transient' }
     }
 

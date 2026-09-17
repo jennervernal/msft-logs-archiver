@@ -61,6 +61,7 @@ try {
     $startUtc = $dateRange.StartUtc
     $endUtc = $dateRange.EndUtc
     $lock = Enter-ArchiveLock $outputRoot
+    $pendingRunId = $null
     if ($config.ArchiveMode -eq 'Incremental') {
         $pendingState = [ordered]@{
             schemaVersion = '1.0'
@@ -78,8 +79,10 @@ try {
             if ($existingIncrementalState.ContainsKey('lastSuccessfulEndUtc')) {
                 $pendingState.lastSuccessfulEndUtc = $existingIncrementalState.lastSuccessfulEndUtc
             }
+            if ($existingIncrementalState.ContainsKey('pendingRunId')) {
+                $pendingRunId = [string]$existingIncrementalState.pendingRunId
+            }
         }
-        Write-JsonAtomic -Path $incrementalStatePath -Value $pendingState
     }
     $azureSelection = if ($config.ContainsKey('AzureSubscriptionIds')) { @($config.AzureSubscriptionIds) -join ',' } else { '' }
     $unifiedSelection = if ($config.ContainsKey('UnifiedAuditRecordTypes')) { @($config.UnifiedAuditRecordTypes) -join ',' } else { '' }
@@ -87,7 +90,15 @@ try {
     $overrideFingerprint = if ($config.ContainsKey('ServicePolicyOverrides')) { $config.ServicePolicyOverrides | ConvertTo-Json -Compress -Depth 10 } else { '' }
     $resourceFingerprint = $config.ResourceControls | ConvertTo-Json -Compress -Depth 5
     $fingerprintInput = "$($config.TenantId)|$($startUtc.ToString('o'))|$($endUtc.ToString('o'))|$(@($config.Collectors) -join ',')|$($config.WindowHours)|$azureSelection|$unifiedSelection|$defenderSelection|$($config.ScaleProfile)|$overrideFingerprint|$resourceFingerprint"
-    $runId = "$($startUtc.ToString('yyyyMMddTHHmmssZ'))-$((Get-StableHash $fingerprintInput).Substring(0, 12))"
+    $generatedRunId = "$($startUtc.ToString('yyyyMMddTHHmmssZ'))-$((Get-StableHash $fingerprintInput).Substring(0, 12))"
+    $runId = if ($pendingRunId) { $pendingRunId } else { $generatedRunId }
+    if ($runId -notmatch '^\d{8}T\d{6}Z-[a-f0-9]{12}$') {
+        throw "Incremental state contains invalid pending run ID '$runId'."
+    }
+    if ($config.ArchiveMode -eq 'Incremental') {
+        $pendingState.pendingRunId = $runId
+        Write-JsonAtomic -Path $incrementalStatePath -Value $pendingState
+    }
     $runRoot = Join-Path $outputRoot (Join-Path '_runs' $runId)
     Initialize-ArchiveLog (Join-Path $runRoot 'run.log.jsonl')
     $logInitialized = $true
@@ -117,6 +128,17 @@ try {
     $runtimeInitialized = $true
     $checkpointPath = Join-Path $runRoot 'checkpoint.json'
     $checkpoint = Read-Checkpoint $checkpointPath
+    if ($checkpoint.ContainsKey('runId') -and $checkpoint.runId -ne $runId) {
+        throw "Checkpoint run ID '$($checkpoint.runId)' does not match pending run ID '$runId'."
+    }
+    if ($checkpoint.ContainsKey('queryStartUtc') -and
+        (ConvertTo-UtcDateTime $checkpoint.queryStartUtc 'checkpoint query start') -ne $startUtc) {
+        throw 'Checkpoint query start does not match the pending incremental range.'
+    }
+    if ($checkpoint.ContainsKey('queryEndUtc') -and
+        (ConvertTo-UtcDateTime $checkpoint.queryEndUtc 'checkpoint query end') -ne $endUtc) {
+        throw 'Checkpoint query end does not match the pending incremental range.'
+    }
     $checkpoint['runId'] = $runId
     $checkpoint['configFingerprint'] = Get-StableHash $fingerprintInput
     $checkpoint['queryStartUtc'] = $startUtc.ToString('o')

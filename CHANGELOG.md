@@ -12,3 +12,9 @@ All notable changes to this project are documented here.
 - Adaptive per-service retries, jitter, pacing, quota signals, window/page/concurrency reduction, recovery, and circuit breakers.
 - Pester coverage for core persistence/integrity and rate-limit behavior.
 - Production installation, permission, configuration, architecture, operations, scaling, archive, recovery, security, troubleshooting, collector, verification, and retention documentation.
+
+### Fixed
+
+- Corrected Intune and Azure Activity time filters, Azure pagination, Unified Audit JSON handling, and Exchange WAM compatibility.
+- Retried wrapped Graph throttles and transient Purview server errors during long backfills.
+- Replaced orphan partition archives safely and persisted pending run IDs so interrupted incremental runs resume the existing checkpoint.

@@ -99,6 +99,24 @@ Describe 'archive hashing and manifest validation' {
             Where-Object FullName -Like '*EmptySource*' | Select-Object -First 1
         (Test-ArchiveManifest $manifestPath.FullName).Valid | Should -BeTrue
     }
+
+    It 'replaces an orphan archive left by a failed partition attempt' {
+        $start = [DateTime]::Parse('2026-09-17T10:00:00Z').ToUniversalTime()
+        $end = $start.AddHours(1)
+        $paths = Get-PartitionPaths -OutputRoot $TestDrive -Source 'EntraAudit' -RunId 'retry-run' -StartUtc $start -EndUtc $end
+        New-Item -ItemType Directory -Path $paths.Directory -Force | Out-Null
+        Set-Content -LiteralPath $paths.Archive -Value 'orphan'
+        Write-FailedPartitionManifest -OutputRoot $TestDrive -Source 'EntraAudit' -RunId 'retry-run' `
+            -StartUtc $start -EndUtc $end -ErrorMessage 'first attempt failed'
+
+        $manifest = Write-ArchivePartition -OutputRoot $TestDrive -Source 'EntraAudit' -RunId 'retry-run' `
+            -StartUtc $start -EndUtc $end -Records @([pscustomobject]@{ id = 'recovered' }) `
+            -DeduplicationKey { param($record) $record.id } -MinimumFreeDiskGB 0
+
+        $manifest.status | Should -Be 'success'
+        $manifest.recordCount | Should -Be 1
+        (Test-ArchiveManifest $paths.Manifest).Valid | Should -BeTrue
+    }
 }
 
 Describe 'Assert-ArchiveConfig' {

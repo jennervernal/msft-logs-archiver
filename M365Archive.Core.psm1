@@ -425,6 +425,9 @@ function Write-ArchivePartition {
         }
         Remove-Item -LiteralPath $paths.Manifest -Force
     }
+    if (Test-Path -LiteralPath $paths.Archive) {
+        Remove-Item -LiteralPath $paths.Archive -Force
+    }
     New-Item -ItemType Directory -Path $paths.Directory -Force | Out-Null
     $jsonlTemp = Join-Path $paths.Directory ".$([Guid]::NewGuid().ToString('N')).jsonl.tmp"
     $gzipTemp = "$($paths.Archive).$([Guid]::NewGuid().ToString('N')).tmp"
